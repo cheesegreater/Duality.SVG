@@ -49,8 +49,6 @@ namespace Cheesegreater.Duality.Plugin.SVG.Components
             set { mainTexture = value; }
         }
 
-        public List<SVGDeclaredField> DeclaredFields { get; set; }
-
         [DontSerialize]
         private Canvas canvas;
 
@@ -102,8 +100,9 @@ namespace Cheesegreater.Duality.Plugin.SVG.Components
         public void Draw(IDrawDevice device)
         {
             if (svgFile.Res == null) return;
+            if (!svgFile.IsLoaded) svgFile.EnsureLoaded();
 
-            verticiesList = new List<Vector3>();
+            // verticiesList = new List<Vector3>();
 
             canvas.Begin(device);
             canvas.State.SetMaterial(new BatchInfo(DrawTechnique.Alpha, ColorRgba.White, mainTexture));  // enables transparency
@@ -111,101 +110,65 @@ namespace Cheesegreater.Duality.Plugin.SVG.Components
             canvas.State.TransformAngle = GameObj.Transform.Angle;
             canvas.State.DepthOffset = depthOffset;
 
-            try
+            // TODO: Move this to resource import method
+            svgFile.Res.GenerateShapes();
+            foreach (Shape shape in svgFile.Res.Shapes)
             {
-                XmlReader xml = XmlReader.Create(GenerateStreamFromString(svgFile.Res.Content));
-                xml.MoveToContent();
-                xml.Read();
-                while (!xml.EOF)
+                if (shape.GetType() == typeof(Resources.Rect))
                 {
-                    if (xml.NodeType == XmlNodeType.Element && xml.HasAttributes)
-                    {
-                        string tagName = xml.Name;
-                        XElement element = XNode.ReadFrom(xml) as XElement;
-                        List<XAttribute> attributes = element.Attributes().ToList();
-                        switch (tagName)
-                        {
-                            case "rect":
-                                HandleRect(attributes);
-                                break;
-                            case "circle":
-                                HandleCircle(attributes);
-                                break;
-                            case "polygon":
-                                HandlePolygon(attributes);
-                                break;
-                        }
-                    }
-                    else
-                        xml.Read();
+                    Resources.Rect rect = (Resources.Rect)shape;
+
+                    Vector3 position = new Vector3(rect.X.Invoke(), rect.Y.Invoke(), rect.Z.Invoke());
+                    Vector2 size = new Vector2(rect.Width.Invoke(), rect.Height.Invoke());
+                    ColorRgba fillColor = rect.FillColor.Invoke();
+                    ColorRgba strokeColor = rect.StrokeColor.Invoke();
+                    float strokeWidth = rect.StrokeWidth.Invoke();
+                    CornerType cornerType = rect.CornerType.Invoke();
+
+                    if (fillColor.A > 0) DrawRect(position, size, fillColor);
+                    if (strokeColor.A > 0) DrawRectStroke(position, size, strokeColor, strokeWidth, cornerType);
+                }
+                else if (shape.GetType() == typeof(Circle))
+                {
+                    Circle circle = (Circle)shape;
+
+                    Vector3 position = new Vector3(circle.X.Invoke(), circle.Y.Invoke(), circle.Z.Invoke());
+                    float radius = circle.Radius.Invoke();
+                    ColorRgba fillColor = circle.FillColor.Invoke();
+                    ColorRgba strokeColor = circle.StrokeColor.Invoke();
+                    float strokeWidth = circle.StrokeWidth.Invoke();
+
+                    if (fillColor.A > 0) DrawCircle(position, radius, fillColor);
+                    if (strokeColor.A > 0) DrawCircleStroke(position, radius, strokeColor, strokeWidth);
+                }
+                else if (shape.GetType() == typeof(Polygon))
+                {
+                    Polygon polygon = (Polygon)shape;
+
+                    Vector3 position = new Vector3(polygon.X.Invoke(), polygon.Y.Invoke(), polygon.Z.Invoke());
+                    List<Vector2> points = polygon.Points.Invoke();
+                    ColorRgba fillColor = polygon.FillColor.Invoke();
+                    ColorRgba strokeColor = polygon.StrokeColor.Invoke();
+                    float strokeWidth = polygon.StrokeWidth.Invoke();
+                    CornerType cornerType = polygon.CornerType.Invoke();
+
+                    if (fillColor.A > 0) DrawPolygon(position, points.ToArray(), fillColor);
+                    if (strokeColor.A > 0) DrawPolygonStroke(position, points.ToArray(), strokeColor, strokeWidth, cornerType);
+                }
+                else if (shape.GetType() == typeof(Text))
+                {
+                    Text text = (Text)shape;
+
+                    Vector3 position = new Vector3(text.X.Invoke(), text.Y.Invoke(), text.Z.Invoke());
+                    string content = text.Content.Invoke();
+                    ColorRgba fillColor = text.FillColor.Invoke();
+                    ContentRef<Font> font = text.FontStyle.Invoke();
+
+                    DrawText(position, content, fillColor, font);
                 }
             }
-            finally
-            {
-                canvas.End();
-            }
-        }
 
-        // from https://stackoverflow.com/a/1879470
-        private static Stream GenerateStreamFromString(string s)
-        {
-            var stream = new MemoryStream();
-            var writer = new StreamWriter(stream);
-            writer.Write(s);
-            writer.Flush();
-            stream.Position = 0;
-            return stream;
-        }
-
-        private void HandleRect(List<XAttribute> attributes)
-        {
-            Vector3 position = new Vector3();
-            Vector2 size = new Vector2();
-
-            foreach (XAttribute a in attributes)
-            {
-                switch (a.Name.LocalName)
-                {
-                    case "x":
-                        position.X += GetValue(a.Value, (string s) => float.Parse(s));
-                        break;
-                    case "y":
-                        position.Y += GetValue(a.Value, (string s) => float.Parse(s));
-                        break;
-                    case "z":
-                        position.Z += GetValue(a.Value, (string s) => float.Parse(s));
-                        break;
-                    case "width":
-                        size.X = GetValue(a.Value, (string s) => float.Parse(s));
-                        break;
-                    case "height":
-                        size.Y = GetValue(a.Value, (string s) => float.Parse(s));
-                        break;
-                    case "style":
-                        Dictionary<string, string> styles = StyleToDict(a.Value);
-                        if (styles.ContainsKey("fill"))
-                        {
-                            ColorRgba fillColor = GetValue(styles["fill"], (string s) => StringToColorRgba(s));
-                            if (styles.ContainsKey("fill-opacity"))
-                                fillColor.A = (byte) (GetValue(styles["fill-opacity"], (string s) => float.Parse(s)) * 255f);
-                            DrawRect(position, size, fillColor);
-                        }
-                        if (styles.ContainsKey("stroke"))
-                        {
-                            ColorRgba strokeColor = GetValue(styles["stroke"], (string s) => StringToColorRgba(s));
-                            float strokeWidth = 2f;
-                            if (styles.ContainsKey("stroke-width"))
-                                strokeWidth = GetValue(styles["stroke-width"], (string s) => float.Parse(s));
-                            if (styles.ContainsKey("stroke-opacity"))
-                                strokeColor.A = (byte)(GetValue(styles["stroke-opacity"], (string s) => float.Parse(s)) * 255f);
-                            CornerType cornerType = CornerType.Miter;
-                            if (styles.ContainsKey("stroke-linejoin"))
-                                cornerType = GetValue(styles["stroke-linejoin"], (string s) => (CornerType)Enum.Parse(typeof(CornerType), styles["stroke-linejoin"], true));
-                            DrawRectStroke(position, size, strokeColor, strokeWidth, cornerType);
-                        }
-                        break;
-                }
-            }
+            canvas.End();
         }
 
         private void DrawRect(Vector3 position, Vector2 size, ColorRgba fillColor)
@@ -217,11 +180,6 @@ namespace Cheesegreater.Duality.Plugin.SVG.Components
             verticiesList.Add(position + new Vector3(size.X, 0f, 0f));
             verticiesList.Add(position + new Vector3(size));
             verticiesList.Add(position + new Vector3(0f, size.Y, 0f));
-        }
-
-        enum CornerType
-        {
-            Miter, Round
         }
 
         private void DrawRectStroke(Vector3 position, Vector2 size, ColorRgba strokeColor, float strokeWidth, CornerType cornerType)
@@ -255,52 +213,6 @@ namespace Cheesegreater.Duality.Plugin.SVG.Components
             verticiesList.Add(position + new Vector3(0f, size.Y, 0f) + new Vector3(-offset, offset, 0f));
         }
 
-        private void HandleCircle(List<XAttribute> attributes)
-        {
-            Vector3 position = new Vector3();
-            float radius = 10f;
-
-            foreach (XAttribute a in attributes)
-            {
-                switch (a.Name.LocalName)
-                {
-                    case "cx":
-                        position.X += GetValue(a.Value, (string s) => float.Parse(s));
-                        break;
-                    case "cy":
-                        position.Y += GetValue(a.Value, (string s) => float.Parse(s));
-                        break;
-                    case "cz":
-                        position.Z += GetValue(a.Value, (string s) => float.Parse(s));
-                        break;
-                    case "r":
-                        radius = GetValue(a.Value, (string s) => float.Parse(s));
-                        break;
-                    case "style":
-                        Dictionary<string, string> styles = StyleToDict(a.Value);
-                        if (styles.ContainsKey("fill"))
-                        {
-                            ColorRgba fillColor = GetValue(styles["fill"], (string s) => StringToColorRgba(s));
-                            if (styles.ContainsKey("fill-opacity"))
-                                fillColor.A = (byte)(GetValue(styles["fill-opacity"], (string s) => float.Parse(s)) * 255f);
-                            DrawCircle(position, radius, fillColor);
-                            
-                        }
-                        if (styles.ContainsKey("stroke"))
-                        {
-                            ColorRgba strokeColor = GetValue(styles["stroke"], (string s) => StringToColorRgba(s));
-                            float strokeWidth = 2f;
-                            if (styles.ContainsKey("stroke-width"))
-                                strokeWidth = GetValue(styles["stroke-width"], (string s) => float.Parse(s));
-                            if (styles.ContainsKey("stroke-opacity"))
-                                strokeColor.A = (byte)(GetValue(styles["stroke-opacity"], (string s) => float.Parse(s)) * 255f);
-                            DrawCircleStroke(position, radius, strokeColor, strokeWidth);
-                        }
-                        break;
-                }
-            }
-        }
-
         private void DrawCircle(Vector3 position, float radius, ColorRgba fillColor)
         {
             canvas.State.ColorTint = fillColor;
@@ -321,50 +233,6 @@ namespace Cheesegreater.Duality.Plugin.SVG.Components
             verticiesList.Add(position + new Vector3(radius + strokeWidth / 2f, 0f, 0f));
             verticiesList.Add(position + new Vector3(0f, radius + strokeWidth / 2f, 0f));
             verticiesList.Add(position + new Vector3(-radius - strokeWidth / 2f, 0f, 0f));
-        }
-
-        private void HandlePolygon(List<XAttribute> attributes)
-        {
-            Vector3 position = new Vector3();
-            List<Vector2> points = new List<Vector2>();
-
-            foreach (XAttribute a in attributes)
-            {
-                switch (a.Name.LocalName)
-                {
-                    case "points":
-                        string[] splitPointString = a.Value.Split(' ');
-                        foreach (string pointTuple in splitPointString)
-                        {
-                            string[] point = pointTuple.Split(',');
-                            points.Add(new Vector2(float.Parse(point[0]), float.Parse(point[1])));
-                        }
-                        break;
-                    case "style":
-                        Dictionary<string, string> styles = StyleToDict(a.Value);
-                        if (styles.ContainsKey("fill"))
-                        {
-                            ColorRgba fillColor = GetValue(styles["fill"], (string s) => StringToColorRgba(s));
-                            if (styles.ContainsKey("fill-opacity"))
-                                fillColor.A = (byte)(GetValue(styles["fill-opacity"], (string s) => float.Parse(s)) * 255f);
-                            DrawPolygon(position, points.ToArray(), fillColor);
-                        }
-                        if (styles.ContainsKey("stroke"))
-                        {
-                            ColorRgba strokeColor = GetValue(styles["stroke"], (string s) => StringToColorRgba(s));
-                            float strokeWidth = 2f;
-                            if (styles.ContainsKey("stroke-width"))
-                                strokeWidth = GetValue(styles["stroke-width"], (string s) => float.Parse(s));
-                            if (styles.ContainsKey("stroke-opacity"))
-                                strokeColor.A = (byte)(GetValue(styles["stroke-opacity"], (string s) => float.Parse(s)) * 255f);
-                            CornerType cornerType = CornerType.Miter;
-                            if (styles.ContainsKey("stroke-linejoin"))
-                                cornerType = GetValue(styles["stroke-linejoin"], (string s) => (CornerType)Enum.Parse(typeof(CornerType), styles["stroke-linejoin"], true));
-                            DrawPolygonStroke(position, points.ToArray(), strokeColor, strokeWidth, cornerType);
-                        }
-                        break;
-                }
-            }
         }
 
         private void DrawPolygon(Vector3 position, Vector2[] points, ColorRgba fillColor)
@@ -421,98 +289,17 @@ namespace Cheesegreater.Duality.Plugin.SVG.Components
                 verticiesList.Add(new Vector3(point));
         }
 
-        private Dictionary<string, string> StyleToDict(string styleString)
+        private void DrawText(Vector3 position, string text, ColorRgba fillColor, ContentRef<Font> font)
         {
-            Dictionary<string, string> output = new Dictionary<string, string>();
-            string[] styleSplit = styleString.Split(';').Where(s => s.Length > 0).ToArray();
-            foreach (string style in styleSplit)
-            {
-                string[] keyValue = style.Split(':');
-                output[keyValue[0]] = keyValue[1];
-            }
-            return output;
-        }
+            canvas.State.ColorTint = fillColor;
+            canvas.State.TextFont = font;
+            drawer.DrawText(position, text);
 
-        private T GetValue<T>(string input, Func<string, T> fallback)
-        {
-            if (input[0] == '{')
-                return GetVariableFromComponentProperty<T>(input.Substring(1, input.Length - 2));
-            else if (input[0] == '[')
-                return GetVariableFromComponentMethod<T>(input.Substring(1, input.Length - 2));
-            else
-                return fallback(input);
-        }
-
-        private ColorRgba StringToColorRgba(string styleColor)
-        {
-            ColorRgba output = new ColorRgba();
-            Regex numRegex = new Regex(@"(\d+)", RegexOptions.IgnoreCase);
-            if (styleColor.StartsWith("#"))  // hexadecimal
-            {
-                output.R = byte.Parse(styleColor.Substring(1, 2));
-                output.G = byte.Parse(styleColor.Substring(3, 2));
-                output.B = byte.Parse(styleColor.Substring(5, 2));
-                if (styleColor.Length == 9)  // hex color includes alpha channel
-                    output.A = byte.Parse(styleColor.Substring(7, 2));
-                else
-                    output.A = 255;
-            }
-            else if (styleColor.StartsWith("rgb("))  // RGB function
-            {
-                MatchCollection matches = numRegex.Matches(styleColor);
-                output.R = byte.Parse(matches[0].Value);
-                output.G = byte.Parse(matches[1].Value);
-                output.B = byte.Parse(matches[2].Value);
-                output.A = 255;
-            }
-            else if (styleColor.StartsWith("rgba("))  // RGBA function
-            {
-                MatchCollection matches = numRegex.Matches(styleColor);
-                output.R = byte.Parse(matches[0].Value);
-                output.G = byte.Parse(matches[1].Value);
-                output.B = byte.Parse(matches[2].Value);
-                output.A = byte.Parse(matches[3].Value);
-            }
-            return output;
-        }
-
-        private T GetVariableFromComponentProperty<T>(string str)
-        {
-            T output = default;
-
-            string[] split = str.Split(new char[] { '.' }, 2);
-            Component component = GameObj.Components.FirstOrDefault((Component c) => c.GetType().Name == split[0]);
-            if (component != null)
-            {
-                PropertyInfo propInfo = component.GetType().GetProperty(split[1]);
-                if (propInfo == null)
-                    Logs.Game.WriteError("Property {0} of component {1} does not exist or is not accessible (thrown by variable reference \"{2}\" in SVG file)",
-                        split[1], split[0], str);
-                else
-                    output = (T) propInfo.GetValue(component);
-            }
-
-            return output;
-        }
-
-        private T GetVariableFromComponentMethod<T>(string str)
-        {
-            T output = default;
-
-            string[] splitArgs = str.Split(' ');
-            string[] splitMethodPath = splitArgs[0].Split(new char[] { '.' }, 2);
-            Component component = GameObj.Components.FirstOrDefault((Component c) => c.GetType().Name == splitMethodPath[0]);
-            if (component != null)
-            {
-                MethodInfo methodInfo = component.GetType().GetMethod(splitMethodPath[1]);
-                if (methodInfo == null)
-                    Logs.Game.WriteError("Method {0} of component {1} does not exist or is not accessible (thrown by variable reference \"{2}\" in SVG file)",
-                        splitMethodPath[1], splitMethodPath[0], str);
-                else
-                    output = (T)methodInfo.Invoke(component, splitArgs.Skip(1).ToArray());
-            }
-
-            return output;
+            Vector2 textSize = canvas.MeasureText(text);
+            verticiesList.Add(position);
+            verticiesList.Add(position + new Vector3(textSize.X, 0f, 0f));
+            verticiesList.Add(position + new Vector3(textSize));
+            verticiesList.Add(position + new Vector3(0f, textSize.Y, 0f));
         }
     }
 }

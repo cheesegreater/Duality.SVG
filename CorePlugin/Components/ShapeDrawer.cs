@@ -63,6 +63,12 @@ namespace Cheesegreater.Duality.Plugin.SVG.Components
                 endPos.X - startPos.X + transform.Pos.X, endPos.Y - startPos.Y + transform.Pos.Y, transform.Pos.Z + position.Z, lineWidth);
         }
 
+        public void DrawText(Vector3 position, string text)
+        {
+            OffsetTransformHandle(position.Xy);
+            canvas.DrawText(text, transform.Pos.X, transform.Pos.Y, transform.Pos.Z);
+        }
+
         private void OffsetTransformHandle(Vector2 shapeHandleLocation)
         {
             canvas.State.TransformHandle = -shapeHandleLocation;

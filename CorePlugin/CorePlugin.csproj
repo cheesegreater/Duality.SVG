@@ -53,8 +53,10 @@
     <Compile Include="CorePlugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\ResNames.cs" />
+    <Compile Include="Resources\Shapes.cs" />
     <Compile Include="Resources\SVG.cs" />
     <Compile Include="Resources\SVGDeclaredField.cs" />
+    <Compile Include="Resources\SVGStyle.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="EmbeddedResources\iconCmpSVGRenderer.png" />
