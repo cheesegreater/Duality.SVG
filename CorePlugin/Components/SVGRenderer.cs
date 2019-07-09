@@ -110,63 +110,68 @@ namespace Cheesegreater.Duality.Plugin.SVG.Components
             canvas.State.TransformAngle = GameObj.Transform.Angle;
             canvas.State.DepthOffset = depthOffset;
 
-            foreach (Shape shape in svgFile.Res.Shapes)
+            try
             {
-                if (shape.GetType() == typeof(Resources.Rect))
+                foreach (Shape shape in svgFile.Res.Shapes)
                 {
-                    Resources.Rect rect = (Resources.Rect)shape;
+                    if (shape.GetType() == typeof(Resources.Rect))
+                    {
+                        Resources.Rect rect = (Resources.Rect)shape;
 
-                    Vector3 position = new Vector3(rect.X.Invoke(), rect.Y.Invoke(), rect.Z.Invoke());
-                    Vector2 size = new Vector2(rect.Width.Invoke(), rect.Height.Invoke());
-                    ColorRgba fillColor = rect.FillColor.Invoke();
-                    ColorRgba strokeColor = rect.StrokeColor.Invoke();
-                    float strokeWidth = rect.StrokeWidth.Invoke();
-                    CornerType cornerType = rect.CornerType.Invoke();
+                        Vector3 position = new Vector3(rect.X.Invoke(GameObj), rect.Y.Invoke(GameObj), rect.Z.Invoke(GameObj));
+                        Vector2 size = new Vector2(rect.Width.Invoke(GameObj), rect.Height.Invoke(GameObj));
+                        ColorRgba fillColor = rect.FillColor.Invoke(GameObj);
+                        ColorRgba strokeColor = rect.StrokeColor.Invoke(GameObj);
+                        float strokeWidth = rect.StrokeWidth.Invoke(GameObj);
+                        CornerType cornerType = rect.CornerType.Invoke(GameObj);
 
-                    if (fillColor.A > 0) DrawRect(position, size, fillColor);
-                    if (strokeColor.A > 0) DrawRectStroke(position, size, strokeColor, strokeWidth, cornerType);
-                }
-                else if (shape.GetType() == typeof(Circle))
-                {
-                    Circle circle = (Circle)shape;
+                        if (fillColor.A > 0) DrawRect(position, size, fillColor);
+                        if (strokeColor.A > 0) DrawRectStroke(position, size, strokeColor, strokeWidth, cornerType);
+                    }
+                    else if (shape.GetType() == typeof(Circle))
+                    {
+                        Circle circle = (Circle)shape;
 
-                    Vector3 position = new Vector3(circle.X.Invoke(), circle.Y.Invoke(), circle.Z.Invoke());
-                    float radius = circle.Radius.Invoke();
-                    ColorRgba fillColor = circle.FillColor.Invoke();
-                    ColorRgba strokeColor = circle.StrokeColor.Invoke();
-                    float strokeWidth = circle.StrokeWidth.Invoke();
+                        Vector3 position = new Vector3(circle.X.Invoke(GameObj), circle.Y.Invoke(GameObj), circle.Z.Invoke(GameObj));
+                        float radius = circle.Radius.Invoke(GameObj);
+                        ColorRgba fillColor = circle.FillColor.Invoke(GameObj);
+                        ColorRgba strokeColor = circle.StrokeColor.Invoke(GameObj);
+                        float strokeWidth = circle.StrokeWidth.Invoke(GameObj);
 
-                    if (fillColor.A > 0) DrawCircle(position, radius, fillColor);
-                    if (strokeColor.A > 0) DrawCircleStroke(position, radius, strokeColor, strokeWidth);
-                }
-                else if (shape.GetType() == typeof(Polygon))
-                {
-                    Polygon polygon = (Polygon)shape;
+                        if (fillColor.A > 0) DrawCircle(position, radius, fillColor);
+                        if (strokeColor.A > 0) DrawCircleStroke(position, radius, strokeColor, strokeWidth);
+                    }
+                    else if (shape.GetType() == typeof(Polygon))
+                    {
+                        Polygon polygon = (Polygon)shape;
 
-                    Vector3 position = new Vector3(polygon.X.Invoke(), polygon.Y.Invoke(), polygon.Z.Invoke());
-                    List<Vector2> points = polygon.Points.Invoke();
-                    ColorRgba fillColor = polygon.FillColor.Invoke();
-                    ColorRgba strokeColor = polygon.StrokeColor.Invoke();
-                    float strokeWidth = polygon.StrokeWidth.Invoke();
-                    CornerType cornerType = polygon.CornerType.Invoke();
+                        Vector3 position = new Vector3(polygon.X.Invoke(GameObj), polygon.Y.Invoke(GameObj), polygon.Z.Invoke(GameObj));
+                        List<Vector2> points = polygon.Points.Invoke(GameObj);
+                        ColorRgba fillColor = polygon.FillColor.Invoke(GameObj);
+                        ColorRgba strokeColor = polygon.StrokeColor.Invoke(GameObj);
+                        float strokeWidth = polygon.StrokeWidth.Invoke(GameObj);
+                        CornerType cornerType = polygon.CornerType.Invoke(GameObj);
 
-                    if (fillColor.A > 0) DrawPolygon(position, points.ToArray(), fillColor);
-                    if (strokeColor.A > 0) DrawPolygonStroke(position, points.ToArray(), strokeColor, strokeWidth, cornerType);
-                }
-                else if (shape.GetType() == typeof(Text))
-                {
-                    Text text = (Text)shape;
+                        if (fillColor.A > 0) DrawPolygon(position, points.ToArray(), fillColor);
+                        if (strokeColor.A > 0) DrawPolygonStroke(position, points.ToArray(), strokeColor, strokeWidth, cornerType);
+                    }
+                    else if (shape.GetType() == typeof(Text))
+                    {
+                        Text text = (Text)shape;
 
-                    Vector3 position = new Vector3(text.X.Invoke(), text.Y.Invoke(), text.Z.Invoke());
-                    string content = text.Content.Invoke();
-                    ColorRgba fillColor = text.FillColor.Invoke();
-                    ContentRef<Font> font = text.FontStyle.Invoke();
+                        Vector3 position = new Vector3(text.X.Invoke(GameObj), text.Y.Invoke(GameObj), text.Z.Invoke(GameObj));
+                        string content = text.Content.Invoke(GameObj);
+                        ColorRgba fillColor = text.FillColor.Invoke(GameObj);
+                        ContentRef<Font> font = text.FontStyle.Invoke(GameObj);
 
-                    DrawText(position, content, fillColor, font);
+                        DrawText(position, content, fillColor, font);
+                    }
                 }
             }
-
-            canvas.End();
+            finally
+            {
+                canvas.End();
+            }
         }
 
         private void DrawRect(Vector3 position, Vector2 size, ColorRgba fillColor)

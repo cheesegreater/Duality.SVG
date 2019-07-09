@@ -213,7 +213,7 @@ namespace Cheesegreater.Duality.Plugin.SVG.Resources
                 switch (a.Name.LocalName)
                 {
                     case "points":
-                        polygon.Points = () => {
+                        polygon.Points = (obj) => {
                             return a.Value.Split(' ').ToList().Select(str =>
                             {
                                 string[] point = str.Split(',');
@@ -291,19 +291,19 @@ namespace Cheesegreater.Duality.Plugin.SVG.Resources
             return output;
         }
 
-        private Func<T> GetValue<T>(string input, Func<T> fallback)
+        private Func<GameObject, T> GetValue<T>(string input, Func<T> fallback)
         {
             if (input.StartsWith("{"))
-                return GetVariableFromComponentProperty<T>(input.Substring(1, input.Length - 2));
+                return GetVariableFromComponentMethod<T>(input.Substring(1, input.Length - 2));
             else if (input.StartsWith("["))
             {
                 if (input.Substring(1, input.Length - 2).Split('.').Length == 1)
                     return GetVariableFromThisComponent<T>(input.Substring(1, input.Length - 2));
                 else
-                    return GetVariableFromComponentMethod<T>(input.Substring(1, input.Length - 2));
+                    return GetVariableFromComponentProperty<T>(input.Substring(1, input.Length - 2));
             }
             else
-                return fallback;
+                return (obj) => fallback();
         }
 
         private ColorRgba StringToColorRgba(string styleColor)
@@ -345,54 +345,53 @@ namespace Cheesegreater.Duality.Plugin.SVG.Resources
             return Font.GenericMonospace8;
         }
 
-        private Func<T> GetVariableFromComponentProperty<T>(string str)
+        private Func<GameObject, T> GetVariableFromComponentProperty<T>(string str)
         {
-            string[] split = str.Split(new char[] { '.' }, 3);
-            Component component = Scene.Current.FindGameObject(split[0]).Components.FirstOrDefault((Component c) => c.GetType().Name == split[1]);
-            if (component != null)
+            string[] split = str.Split(new char[] { '.' }, 2);
+            return (obj) =>
             {
+                Component component = obj.Components.FirstOrDefault(cmp => cmp.GetType().Name == split[0]);
+                if (component == null)
+                {
+                    Logs.Game.WriteError("Component {0} does not exist (thrown by property reference \"{1}\" in SVG file", split[0], str);
+                    return default;
+                }
                 PropertyInfo propInfo = component.GetType().GetProperty(split[1]);
                 if (propInfo == null)
                 {
                     Logs.Game.WriteError("Property {0} of component {1} does not exist or is not accessible (thrown by variable reference \"{2}\" in SVG file)",
                         split[1], split[0], str);
-                    return null;
+                    return default;
                 }
-                else
-                    return () => (T)propInfo.GetValue(component);
-            }
-            else
-            {
-                Logs.Game.WriteError("Component {0} does not exist (thrown by variable reference \"{1}\" in SVG file", split[0], str);
-                return null;
-            }
+                return (T)propInfo.GetValue(component);
+            };
         }
 
-        private Func<T> GetVariableFromComponentMethod<T>(string str)
+        private Func<GameObject, T> GetVariableFromComponentMethod<T>(string str)
         {
             string[] splitArgs = str.Split(' ');
-            string[] splitMethodPath = splitArgs[0].Split(new char[] { '.' }, 3);
-            Component component = Scene.Current.FindGameObject(splitMethodPath[0]).Components.FirstOrDefault((Component c) => c.GetType().Name == splitMethodPath[1]);
-            if (component != null)
+            string[] splitMethodPath = splitArgs[0].Split(new char[] { '.' }, 2);
+            return (obj) =>
             {
+                Component component = obj.Components.FirstOrDefault(cmp => cmp.GetType().Name == splitMethodPath[0]);
+                if (component == null)
+                {
+                    Logs.Game.WriteError("Component {0} does not exist (thrown by method reference \"{1}\" in SVG file", splitMethodPath[0], str);
+                    return default;
+                }
                 MethodInfo methodInfo = component.GetType().GetMethod(splitMethodPath[1]);
                 if (methodInfo == null)
                 {
                     Logs.Game.WriteError("Method {0} of component {1} does not exist or is not accessible (thrown by variable reference \"{2}\" in SVG file)",
                         splitMethodPath[1], splitMethodPath[0], str);
-                    return null;
+                    return default;
                 }
-                else
-                    return () => (T)methodInfo.Invoke(component, splitArgs.Skip(1).ToArray());
-            }
-            else
-            {
-                Logs.Game.WriteError("Component {0} does not exist (thrown by variable reference \"{1}\" in SVG file", splitMethodPath[0], str);
-                return null;
-            }
+                var ret = methodInfo.Invoke(component, splitArgs.Skip(1).ToArray());
+                return (T)ret;
+            };
         }
 
-        private Func<T> GetVariableFromThisComponent<T>(string str)
+        private Func<object, T> GetVariableFromThisComponent<T>(string str)
         {
             if (!styles.DeclaredFields.Any(f => f.Name == str))
                 styles.DeclaredFields.Add(new SVGDeclaredField()
@@ -401,7 +400,7 @@ namespace Cheesegreater.Duality.Plugin.SVG.Resources
                     Type = typeof(T),
                     Value = default(T)
                 });
-            return () => (T)styles.DeclaredFields.First(f => f.Name == str).Value;
+            return (obj) => (T)styles.DeclaredFields.First(f => f.Name == str).Value;
         }
     }
 }
