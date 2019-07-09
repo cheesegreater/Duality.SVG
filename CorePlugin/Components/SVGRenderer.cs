@@ -110,8 +110,6 @@ namespace Cheesegreater.Duality.Plugin.SVG.Components
             canvas.State.TransformAngle = GameObj.Transform.Angle;
             canvas.State.DepthOffset = depthOffset;
 
-            // TODO: Move this to resource import method
-            svgFile.Res.GenerateShapes();
             foreach (Shape shape in svgFile.Res.Shapes)
             {
                 if (shape.GetType() == typeof(Resources.Rect))

@@ -38,7 +38,6 @@ namespace Cheesegreater.Duality.Plugin.SVG.Resources
             get { return encoding; }
         }
 
-        [DontSerializeResource]
         private List<Shape> shapes;
         public List<Shape> Shapes
         {
@@ -51,6 +50,12 @@ namespace Cheesegreater.Duality.Plugin.SVG.Resources
         {
             get { return styles; }
             set { styles = value; }
+        }
+
+        protected override void OnLoaded()
+        {
+            base.OnLoaded();
+            GenerateShapes();
         }
 
         public void SetData(string content)
